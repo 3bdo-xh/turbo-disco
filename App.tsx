@@ -11,7 +11,7 @@ import Users from './components/Users';
 import Setup from './components/Setup';
 import Login from './components/Login';
 import InstallPrompt from './components/InstallPrompt';
-import { Product, Sale, ViewState, User, StoreSettings } from './types';
+import { Product, Sale, ViewState, User, StoreSettings, ReturnRecord } from './types';
 import { getStoreData, addData, deleteData } from './services/db';
 import { Database, CheckCircle, Smartphone, ShieldCheck } from 'lucide-react';
 
@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [returns, setReturns] = useState<ReturnRecord[]>([]);
   
   // Auth & Settings State
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
@@ -51,16 +52,18 @@ const App: React.FC = () => {
         await new Promise(r => setTimeout(r, 400));
 
         setInitStep(3); // Loading Data
-        const [loadedSettings, loadedUsers, loadedProducts, loadedSales] = await Promise.all([
+        const [loadedSettings, loadedUsers, loadedProducts, loadedSales, loadedReturns] = await Promise.all([
           getStoreData<StoreSettings>('settings'),
           getStoreData<User>('users'),
           getStoreData<Product>('products'),
-          getStoreData<Sale>('sales')
+          getStoreData<Sale>('sales'),
+          getStoreData<ReturnRecord>('returns')
         ]);
 
         setProducts(loadedProducts);
         setSales(loadedSales);
         setUsers(loadedUsers);
+        setReturns(loadedReturns);
         
         setInitStep(4); // Finalizing
         await new Promise(r => setTimeout(r, 800));
@@ -139,12 +142,30 @@ const App: React.FC = () => {
   const handleReturnProduct = async (productId: string, quantity: number, reason: string) => {
     const updatedProducts = [...products];
     const productIndex = updatedProducts.findIndex(p => p.id === productId);
+    
     if (productIndex !== -1) {
-      const updatedProduct = { ...updatedProducts[productIndex] };
+      const product = updatedProducts[productIndex];
+      
+      // 1. Update Stock
+      const updatedProduct = { ...product };
       updatedProduct.stock += quantity;
       await addData('products', updatedProduct);
       updatedProducts[productIndex] = updatedProduct;
       setProducts(updatedProducts);
+
+      // 2. Create Return Record for Accounting
+      const refundAmount = product.price * quantity;
+      const returnRecord: ReturnRecord = {
+        id: Date.now().toString(),
+        productId,
+        productName: product.name,
+        quantity,
+        amount: refundAmount,
+        date: Date.now(),
+        reason
+      };
+      await addData('returns', returnRecord);
+      setReturns(prev => [...prev, returnRecord]);
     }
   };
 
@@ -222,7 +243,7 @@ const App: React.FC = () => {
       case 'POS':
         return <POS products={products} onCompleteSale={handleCompleteSale} storeSettings={storeSettings!} nextInvoiceId={nextInvoiceId} />;
       case 'REPORTS':
-        return <Reports sales={sales} customers={[]} products={products} />;
+        return <Reports sales={sales} returns={returns} products={products} />;
       case 'RETURNS':
         return <Returns products={products} onReturnProduct={handleReturnProduct} />;
       case 'SETTINGS':

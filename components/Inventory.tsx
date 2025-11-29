@@ -1,7 +1,7 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Product } from '../types';
-import { Plus, Search, Trash2, Edit2, Barcode, Camera, RefreshCw, X, Calendar, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Trash2, Edit2, Barcode, Camera, RefreshCw, X, Calendar, AlertTriangle } from 'lucide-react';
 
 interface InventoryProps {
   products: Product[];
@@ -32,6 +32,21 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
     category: '',
     expiryDateString: ''
   });
+
+  // Cleanup scanner on unmount
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        try {
+          scannerRef.current.stop().then(() => {
+            scannerRef.current.clear();
+          }).catch((err: any) => console.error(err));
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,41 +105,56 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
   const startScanner = (target: 'SEARCH' | 'SKU') => {
     setScanTarget(target);
     setIsScannerOpen(true);
+    
+    // Use timeout to ensure DOM element exists
     setTimeout(() => {
-      const html5QrcodeScanner = new (window as any).Html5QrcodeScanner(
-        "reader-inventory",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        false
-      );
-      
-      html5QrcodeScanner.render((decodedText: string) => {
-        if (target === 'SEARCH') {
-          setSearchQuery(decodedText);
-        } else if (target === 'SKU') {
-          setNewProduct(prev => ({ ...prev, sku: decodedText }));
-        }
-        
-        // Audio feedback
-        const audio = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3');
-        audio.play().catch(() => {});
-        
-        html5QrcodeScanner.clear();
-        setIsScannerOpen(false);
-        setScanTarget(null);
-      }, (errorMessage: any) => {
-        // ignore errors
-      });
+      const html5QrCode = new (window as any).Html5Qrcode("reader-inventory");
+      scannerRef.current = html5QrCode;
 
-      scannerRef.current = html5QrcodeScanner;
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      
+      html5QrCode.start(
+        { facingMode: "environment" }, // Prefer back camera
+        config,
+        (decodedText: string) => {
+          // Success callback
+          if (target === 'SEARCH') {
+            setSearchQuery(decodedText);
+          } else if (target === 'SKU') {
+            setNewProduct(prev => ({ ...prev, sku: decodedText }));
+          }
+          
+          // Audio feedback
+          const audio = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3');
+          audio.play().catch(() => {});
+          
+          stopScanner();
+        },
+        (errorMessage: any) => {
+          // parse error, ignore
+        }
+      ).catch((err: any) => {
+        console.error("Error starting scanner", err);
+        setIsScannerOpen(false);
+        alert("تعذر تشغيل الكاميرا. يرجى التأكد من منح الصلاحيات.");
+      });
     }, 100);
   };
 
   const stopScanner = () => {
     if (scannerRef.current) {
-      scannerRef.current.clear().catch(console.error);
+      scannerRef.current.stop().then(() => {
+        scannerRef.current.clear();
+        setIsScannerOpen(false);
+        setScanTarget(null);
+        scannerRef.current = null;
+      }).catch((err: any) => {
+        console.error("Failed to stop scanner", err);
+        setIsScannerOpen(false);
+      });
+    } else {
+      setIsScannerOpen(false);
     }
-    setIsScannerOpen(false);
-    setScanTarget(null);
   };
 
   const getExpiryStatus = (expiryDate?: number) => {
@@ -302,6 +332,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
                   <input 
                     required 
                     type="number" 
+                    step="any"
                     min="0" 
                     className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                     value={newProduct.cost || ''} 
@@ -314,6 +345,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
                   <input 
                     required 
                     type="number" 
+                    step="any"
                     min="0" 
                     className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                     value={newProduct.price || ''} 
@@ -415,7 +447,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
                   <X size={24} className="text-gray-600" />
                 </button>
               </div>
-              <div id="reader-inventory" className="w-full h-64 bg-gray-100 rounded-lg overflow-hidden"></div>
+              <div id="reader-inventory" className="w-full h-64 bg-black rounded-lg overflow-hidden"></div>
               <p className="text-center text-sm text-gray-500 mt-4">وجه الكاميرا نحو الباركود</p>
            </div>
         </div>

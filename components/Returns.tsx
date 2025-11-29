@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { Product } from '../types';
 import { Search, RotateCcw, CheckCircle, Camera, X } from 'lucide-react';
 
@@ -17,6 +18,21 @@ const Returns: React.FC<ReturnsProps> = ({ products, onReturnProduct }) => {
   // Scanner State
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const scannerRef = useRef<any>(null);
+
+  // Cleanup scanner on unmount
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        try {
+          scannerRef.current.stop().then(() => {
+            scannerRef.current.clear();
+          }).catch((err: any) => console.error(err));
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+  }, []);
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -42,34 +58,47 @@ const Returns: React.FC<ReturnsProps> = ({ products, onReturnProduct }) => {
   const startScanner = () => {
     setIsScannerOpen(true);
     setTimeout(() => {
-      const html5QrcodeScanner = new (window as any).Html5QrcodeScanner(
-        "reader-returns",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        false
-      );
-      
-      html5QrcodeScanner.render((decodedText: string) => {
-        setSearchQuery(decodedText);
-        
-        // Audio feedback
-        const audio = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3');
-        audio.play().catch(() => {});
-        
-        html5QrcodeScanner.clear();
-        setIsScannerOpen(false);
-      }, (errorMessage: any) => {
-        // ignore errors
-      });
+      const html5QrCode = new (window as any).Html5Qrcode("reader-returns");
+      scannerRef.current = html5QrCode;
 
-      scannerRef.current = html5QrcodeScanner;
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      
+      html5QrCode.start(
+        { facingMode: "environment" }, 
+        config,
+        (decodedText: string) => {
+          setSearchQuery(decodedText);
+          
+          // Audio feedback
+          const audio = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3');
+          audio.play().catch(() => {});
+          
+          stopScanner();
+        },
+        (errorMessage: any) => {
+          // ignore
+        }
+      ).catch((err: any) => {
+        console.error("Error starting scanner", err);
+        setIsScannerOpen(false);
+        alert("تعذر تشغيل الكاميرا. يرجى التأكد من منح الصلاحيات.");
+      });
     }, 100);
   };
 
   const stopScanner = () => {
     if (scannerRef.current) {
-      scannerRef.current.clear().catch(console.error);
+      scannerRef.current.stop().then(() => {
+        scannerRef.current.clear();
+        setIsScannerOpen(false);
+        scannerRef.current = null;
+      }).catch((err: any) => {
+        console.error("Failed to stop scanner", err);
+        setIsScannerOpen(false);
+      });
+    } else {
+      setIsScannerOpen(false);
     }
-    setIsScannerOpen(false);
   };
 
   return (
@@ -195,7 +224,7 @@ const Returns: React.FC<ReturnsProps> = ({ products, onReturnProduct }) => {
                   <X size={24} className="text-gray-600" />
                 </button>
               </div>
-              <div id="reader-returns" className="w-full h-64 bg-gray-100 rounded-lg overflow-hidden"></div>
+              <div id="reader-returns" className="w-full h-64 bg-black rounded-lg overflow-hidden"></div>
               <p className="text-center text-sm text-gray-500 mt-4">وجه الكاميرا نحو الباركود</p>
            </div>
         </div>

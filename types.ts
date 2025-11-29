@@ -33,6 +33,18 @@ export interface Sale {
   date: number;
   paymentMethod: PaymentMethod;
   userName?: string; // Cashier name
+  amountPaid?: number; // Amount given by customer
+  change?: number; // Change returned to customer
+}
+
+export interface ReturnRecord {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  amount: number; // Value returned (price * qty)
+  date: number;
+  reason?: string;
 }
 
 export type UserRole = 'ADMIN' | 'CASHIER';

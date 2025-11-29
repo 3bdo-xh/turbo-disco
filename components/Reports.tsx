@@ -1,19 +1,30 @@
 
 import React from 'react';
-import { Sale, Product } from '../types';
-import { DollarSign, TrendingUp, Coins, AlertTriangle } from 'lucide-react';
+import { Sale, Product, ReturnRecord } from '../types';
+import { DollarSign, TrendingUp, Coins, AlertTriangle, RotateCcw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface ReportsProps {
   sales: Sale[];
-  customers: any[]; // Kept for compatibility but unused
+  returns: ReturnRecord[];
   products: Product[];
 }
 
-const Reports: React.FC<ReportsProps> = ({ sales, products }) => {
-  const totalRevenue = sales.reduce((acc, sale) => acc + sale.total, 0);
+const Reports: React.FC<ReportsProps> = ({ sales, returns, products }) => {
+  // 1. Gross Revenue
+  const grossRevenue = sales.reduce((acc, sale) => acc + sale.total, 0);
+  
+  // 2. Total Returns Value
+  const totalReturns = returns.reduce((acc, ret) => acc + ret.amount, 0);
+
+  // 3. Net Revenue
+  const netRevenue = grossRevenue - totalReturns;
+  
+  // 4. Low Stock
   const lowStockProducts = products.filter(p => p.stock < 5).length;
-  const totalProfit = sales.reduce((acc, sale) => {
+
+  // 5. Total Profit (Gross Profit - Return Profit Loss)
+  const grossProfit = sales.reduce((acc, sale) => {
     const saleProfit = sale.items.reduce((itemAcc, item) => {
       const product = products.find(p => p.id === item.productId);
       const cost = product ? product.cost : 0;
@@ -21,6 +32,20 @@ const Reports: React.FC<ReportsProps> = ({ sales, products }) => {
     }, 0);
     return acc + saleProfit;
   }, 0);
+
+  const returnProfitLoss = returns.reduce((acc, ret) => {
+    const product = products.find(p => p.id === ret.productId);
+    const cost = product ? product.cost : 0;
+    // We lost the margin we made on this sale. Margin = Price - Cost.
+    // Refund Amount is Price * Qty.
+    // Cost recovered is Cost * Qty (since item is back in stock).
+    // So lost profit is (Price - Cost) * Qty.
+    // Or simplified: Amount - (Cost * Qty).
+    const profitLost = ret.amount - (cost * ret.quantity);
+    return acc + profitLost;
+  }, 0);
+
+  const netProfit = grossProfit - returnProfitLoss;
 
   const now = Date.now();
   const thirtyDaysFromNow = now + (30 * 24 * 60 * 60 * 1000);
@@ -35,9 +60,13 @@ const Reports: React.FC<ReportsProps> = ({ sales, products }) => {
 
   const chartData = Object.keys(salesByDate).map(date => ({ name: date, amount: salesByDate[date] })).slice(-7);
 
-  const StatCard = ({ title, value, icon: Icon, color }: any) => (
+  const StatCard = ({ title, value, icon: Icon, color, subValue }: any) => (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
-      <div><p className="text-gray-500 text-sm mb-1">{title}</p><h3 className="text-2xl font-bold text-gray-800">{value}</h3></div>
+      <div>
+        <p className="text-gray-500 text-sm mb-1">{title}</p>
+        <h3 className="text-2xl font-bold text-gray-800">{value}</h3>
+        {subValue && <p className="text-xs text-gray-400 mt-1">{subValue}</p>}
+      </div>
       <div className={`p-3 rounded-full ${color} bg-opacity-10`}><Icon className={`w-6 h-6 ${color.replace('bg-', 'text-')}`} /></div>
     </div>
   );
@@ -45,10 +74,33 @@ const Reports: React.FC<ReportsProps> = ({ sales, products }) => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-gray-800">التقارير والتحليلات</h2></div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard title="إجمالي المبيعات" value={`${totalRevenue.toLocaleString()} د.ل`} icon={DollarSign} color="text-green-600 bg-green-600" />
-        <StatCard title="صافي الربح" value={`${totalProfit.toLocaleString()} د.ل`} icon={Coins} color="text-teal-600 bg-teal-600" />
-        <StatCard title="نواقص المخزون" value={lowStockProducts} icon={TrendingUp} color="text-red-600 bg-red-600" />
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard 
+          title="صافي المبيعات" 
+          value={`${netRevenue.toLocaleString()} د.ل`} 
+          subValue={`إجمالي: ${grossRevenue.toLocaleString()}`}
+          icon={DollarSign} 
+          color="text-green-600 bg-green-600" 
+        />
+        <StatCard 
+          title="صافي الربح" 
+          value={`${netProfit.toLocaleString()} د.ل`} 
+          icon={Coins} 
+          color="text-teal-600 bg-teal-600" 
+        />
+        <StatCard 
+          title="المسترجعات" 
+          value={`${totalReturns.toLocaleString()} د.ل`} 
+          icon={RotateCcw} 
+          color="text-orange-600 bg-orange-600" 
+        />
+        <StatCard 
+          title="نواقص المخزون" 
+          value={lowStockProducts} 
+          icon={TrendingUp} 
+          color="text-red-600 bg-red-600" 
+        />
       </div>
       
       {(expiredProducts.length > 0 || expiringSoonProducts.length > 0) && (

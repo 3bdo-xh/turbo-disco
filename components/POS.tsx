@@ -1,7 +1,7 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Product, CartItem, Sale, PaymentMethod, StoreSettings } from '../types';
-import { ShoppingCart, Plus, Minus, Printer, Check, ArrowRight, Search, X, ScanBarcode, Camera, Store, FileText, Calendar, Clock, User, Phone, MapPin } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Printer, Check, ArrowRight, Search, X, ScanBarcode, Camera, Store, FileText, Calendar, Clock, User, Phone, MapPin, Banknote } from 'lucide-react';
 
 interface POSProps {
   products: Product[];
@@ -17,6 +17,11 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  
+  // Cash Payment Modal State
+  const [isCashModalOpen, setIsCashModalOpen] = useState(false);
+  const [cashAmountPaid, setCashAmountPaid] = useState<string>('');
+  
   const scannerRef = useRef<any>(null);
 
   const PAYMENT_OPTIONS: { id: PaymentMethod; label: string; imageUrls: string[]; bg: string }[] = [
@@ -70,6 +75,19 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
     }
   ];
 
+  // Cleanup scanner
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        try {
+          scannerRef.current.stop().then(() => {
+            scannerRef.current.clear();
+          }).catch((err: any) => console.error(err));
+        } catch (e) {}
+      }
+    };
+  }, []);
+
   const addToCart = (product: Product) => {
     if (product.stock <= 0) {
       alert("عذراً، هذا المنتج نفذ من المخزون.");
@@ -109,8 +127,10 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  const handleCheckout = () => {
+  const initiateCheckout = () => {
     if (cart.length === 0 || !selectedPaymentMethod) return;
+
+    // Check Stock
     const outOfStockItems = cart.filter(item => {
       const product = products.find(p => p.id === item.productId);
       return !product || product.stock < item.quantity;
@@ -119,43 +139,88 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
       alert(`عذراً، الكمية المطلوبة غير متوفرة: ${outOfStockItems.map(i => i.productName).join(', ')}`);
       return;
     }
-    
+
+    // If Cash, open modal
+    if (selectedPaymentMethod === 'Cash') {
+      setIsCashModalOpen(true);
+      setCashAmountPaid('');
+    } else {
+      finalizeSale();
+    }
+  };
+
+  const finalizeSale = (amountPaid?: number, change?: number) => {
+    if (!selectedPaymentMethod) return;
+
     const newSale: Sale = {
       id: nextInvoiceId,
       items: [...cart],
       total: cartTotal,
       date: Date.now(),
       paymentMethod: selectedPaymentMethod,
+      amountPaid: amountPaid,
+      change: change
     };
 
     onCompleteSale(newSale);
     setLastSale(newSale);
     setCart([]);
     setViewMode('RECEIPT');
+    setIsCashModalOpen(false);
+  };
+
+  const handleCashConfirm = (e: React.FormEvent) => {
+    e.preventDefault();
+    const paid = Number(cashAmountPaid);
+    if (paid < cartTotal) {
+      alert("المبلغ المدفوع أقل من إجمالي الفاتورة");
+      return;
+    }
+    const change = paid - cartTotal;
+    finalizeSale(paid, change);
   };
 
   const startScanner = () => {
     setIsScannerOpen(true);
     setTimeout(() => {
-      const html5QrcodeScanner = new (window as any).Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
-      html5QrcodeScanner.render((decodedText: string) => {
-        const product = products.find(p => p.sku === decodedText);
-        if (product && product.stock > 0) {
-           addToCart(product);
-           new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3').play().catch(() => {});
-           html5QrcodeScanner.clear();
-           setIsScannerOpen(false);
-        } else {
-           alert(product ? 'المنتج نفذ من المخزون' : 'المنتج غير موجود');
-        }
-      }, () => {});
-      scannerRef.current = html5QrcodeScanner;
+      const html5QrCode = new (window as any).Html5Qrcode("reader-pos");
+      scannerRef.current = html5QrCode;
+
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      
+      html5QrCode.start(
+        { facingMode: "environment" }, 
+        config,
+        (decodedText: string) => {
+          const product = products.find(p => p.sku === decodedText);
+          if (product && product.stock > 0) {
+             addToCart(product);
+             new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3').play().catch(() => {});
+             stopScanner();
+          } else {
+             alert(product ? 'المنتج نفذ من المخزون' : 'المنتج غير موجود');
+             // Don't stop scanner, let user try another
+          }
+        },
+        () => {}
+      ).catch((err: any) => {
+        console.error("Scanner Error", err);
+        alert("تعذر تشغيل الكاميرا");
+        setIsScannerOpen(false);
+      });
     }, 100);
   };
 
   const stopScanner = () => {
-    scannerRef.current?.clear().catch(console.error);
-    setIsScannerOpen(false);
+    if (scannerRef.current) {
+      scannerRef.current.stop().then(() => {
+        scannerRef.current.clear();
+        setIsScannerOpen(false);
+        scannerRef.current = null;
+      });
+    } else {
+      setIsScannerOpen(false);
+    }
   };
 
   const renderPaymentLogo = (urls: string[]) => {
@@ -271,6 +336,21 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
                 <span>الإجمالي</span>
                 <span>{lastSale.total.toFixed(2)} د.ل</span>
              </div>
+             
+             {/* Cash Details */}
+             {lastSale.paymentMethod === 'Cash' && lastSale.amountPaid !== undefined && (
+               <div className="flex flex-col gap-1 px-2 pt-1 border-b border-gray-200 pb-2 mb-2">
+                 <div className="flex justify-between text-xs">
+                    <span>المدفوع (نقداً)</span>
+                    <span className="font-bold">{lastSale.amountPaid.toFixed(2)}</span>
+                 </div>
+                 <div className="flex justify-between text-xs">
+                    <span>الباقي</span>
+                    <span className="font-bold">{lastSale.change?.toFixed(2)}</span>
+                 </div>
+               </div>
+             )}
+
              <div className="flex justify-between items-center text-xs text-gray-600 px-2 mt-2">
                 <span>طريقة الدفع</span>
                 <span className="font-bold border border-gray-300 px-2 rounded">{PAYMENT_OPTIONS.find(opt => opt.id === lastSale.paymentMethod)?.label}</span>
@@ -395,13 +475,78 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
           </div>
           <div className="p-4 bg-gray-50 border-t border-gray-100 pb-safe md:pb-4 rounded-b-xl">
             <div className="flex justify-between items-center mb-4"><span className="text-gray-600">المجموع الكلي</span><span className="text-2xl font-bold text-primary">{cartTotal.toFixed(2)} د.ل</span></div>
-            <button onClick={handleCheckout} disabled={cart.length === 0} className={`w-full py-3.5 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg transition-all ${cart.length > 0 ? 'bg-primary text-white hover:bg-teal-800' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
+            <button onClick={initiateCheckout} disabled={cart.length === 0} className={`w-full py-3.5 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg transition-all ${cart.length > 0 ? 'bg-primary text-white hover:bg-teal-800' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
               <span>إتمام البيع</span><ArrowRight size={20} className="rtl:rotate-180" />
             </button>
           </div>
         </div>
       </div>
-      {isScannerOpen && <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-xl w-full max-w-sm p-4"><div id="reader" className="w-full h-64 bg-gray-100 rounded-lg"></div><button onClick={stopScanner} className="mt-4 w-full bg-red-100 text-red-600 py-2 rounded-lg">إغلاق</button></div></div>}
+
+      {/* Scanner Modal */}
+      {isScannerOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+           <div className="bg-white rounded-xl w-full max-w-sm p-4"><div id="reader-pos" className="w-full h-64 bg-black rounded-lg overflow-hidden"></div><button onClick={stopScanner} className="mt-4 w-full bg-red-100 text-red-600 py-2 rounded-lg">إغلاق</button></div>
+        </div>
+      )}
+
+      {/* Cash Payment Modal */}
+      {isCashModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95">
+             <div className="flex justify-between items-start mb-6">
+               <div>
+                  <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <Banknote className="text-green-600" />
+                    دفع نقدي
+                  </h3>
+                  <p className="text-sm text-gray-500">الرجاء إدخال المبلغ المستلم</p>
+               </div>
+               <button onClick={() => setIsCashModalOpen(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
+             </div>
+
+             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+                <div className="flex justify-between text-lg font-bold">
+                   <span className="text-gray-600">المطلوب:</span>
+                   <span className="text-primary">{cartTotal.toFixed(2)} د.ل</span>
+                </div>
+             </div>
+
+             <form onSubmit={handleCashConfirm} className="space-y-6">
+               <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">المبلغ المدفوع</label>
+                  <input 
+                    autoFocus
+                    type="number"
+                    step="any"
+                    min={cartTotal}
+                    required
+                    value={cashAmountPaid}
+                    onChange={(e) => setCashAmountPaid(e.target.value)}
+                    className="w-full text-center text-3xl font-bold p-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:ring-4 focus:ring-green-500/20 outline-none transition-all text-gray-800"
+                    placeholder="0.00"
+                  />
+               </div>
+
+               {Number(cashAmountPaid) >= cartTotal && (
+                 <div className="text-center animate-in fade-in slide-in-from-top-2">
+                    <p className="text-sm text-gray-500 mb-1">الباقي (المرتجع)</p>
+                    <p className="text-3xl font-bold text-green-600">{(Number(cashAmountPaid) - cartTotal).toFixed(2)} د.ل</p>
+                 </div>
+               )}
+
+               <button 
+                  type="submit"
+                  disabled={Number(cashAmountPaid) < cartTotal}
+                  className={`w-full py-3.5 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg transition-all ${Number(cashAmountPaid) >= cartTotal ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                >
+                  <Check size={20} />
+                  تأكيد وطباعة
+                </button>
+             </form>
+          </div>
+        </div>
+      )}
+
       <div className="h-[350px] md:hidden shrink-0"></div> 
     </div>
   );

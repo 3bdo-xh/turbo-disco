@@ -1,8 +1,8 @@
 
-import { Product, Sale, User, StoreSettings } from '../types';
+import { Product, Sale, User, StoreSettings, ReturnRecord } from '../types';
 
 const DB_NAME = 'LibyaSalesDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -34,6 +34,11 @@ export const initDB = (): Promise<IDBDatabase> => {
       }
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'id' });
+      }
+
+      // V3 Stores
+      if (!db.objectStoreNames.contains('returns')) {
+        db.createObjectStore('returns', { keyPath: 'id' });
       }
 
       // Cleanup old stores if necessary
