@@ -1,0 +1,7 @@
+{
+  "name": "NAMA (نماء) - Libyan Sales System",
+  "description": "An offline-first sales and CRM system tailored for Libyan SMEs. Features inventory management, lead tracking, invoicing, and AI-powered insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
