@@ -44,10 +44,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole }) => {
         />
 
         <MenuButton 
-          label="المنتجات" 
+          label="المنتجات والمخزون" 
           icon={Package} 
           color="bg-gradient-to-br from-teal-600 to-teal-800" 
-          onClick={() => onNavigate('INVENTORY')} 
+          onClick={() => onNavigate('INVENTORY_MENU')} 
         />
 
         <MenuButton 

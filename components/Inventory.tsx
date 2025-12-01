@@ -54,10 +54,38 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onUpdateP
     audio.play().catch(() => {});
   };
 
+  const handleOpenModal = (product?: Product) => {
+    if (product) {
+       setNewProduct({
+          ...product,
+          expiryDateString: product.expiryDate ? new Date(product.expiryDate).toISOString().split('T')[0] : ''
+       });
+    } else {
+       setNewProduct({ name: '', sku: '', price: 0, cost: 0, stock: 0, category: '', expiryDateString: '' });
+    }
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newProduct.name && newProduct.price) {
-      // Check if SKU already exists
+      // Check if updating existing by ID (from edit button)
+      if (newProduct.id) {
+         const updatedProduct = {
+             ...newProduct,
+             price: Number(newProduct.price),
+             cost: Number(newProduct.cost),
+             stock: Number(newProduct.stock),
+             expiryDate: newProduct.expiryDateString ? new Date(newProduct.expiryDateString).getTime() : newProduct.expiryDate
+         } as Product;
+         onUpdateProduct(updatedProduct);
+         playSuccessSound();
+         setIsModalOpen(false);
+         setNewProduct({ name: '', sku: '', price: 0, cost: 0, stock: 0, category: '', expiryDateString: '' });
+         return;
+      }
+
+      // Check if SKU already exists (for new products)
       const existingProduct = products.find(p => p.sku === newProduct.sku && newProduct.sku !== '');
       
       if (existingProduct) {
@@ -220,13 +248,13 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onUpdateP
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold text-gray-800">المخزون والمنتجات</h2>
+        <h2 className="text-2xl font-bold text-gray-800">المنتجات</h2>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => handleOpenModal()}
           className="bg-primary hover:bg-teal-800 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
         >
           <Plus size={20} />
-          <span>إضافة / تحديث منتج</span>
+          <span>إضافة منتج</span>
         </button>
       </div>
 
@@ -300,7 +328,18 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onUpdateP
                       {product.stock}
                     </td>
                     <td className="p-4 flex gap-2">
-                      <button onClick={() => confirmDelete(product)} className="p-1.5 text-red-500 hover:bg-red-50 rounded" title="حذف">
+                      <button 
+                        onClick={() => handleOpenModal(product)} 
+                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded" 
+                        title="تعديل الكمية / البيانات"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button 
+                        onClick={() => confirmDelete(product)} 
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded" 
+                        title="حذف"
+                      >
                         <Trash2 size={18} />
                       </button>
                     </td>
@@ -317,12 +356,16 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onUpdateP
         </div>
       </div>
 
-      {/* Add Product Modal */}
+      {/* Add/Edit Product Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200 h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold mb-4 text-gray-800">إضافة منتج جديد</h3>
-            <p className="text-xs text-gray-500 mb-4">ملاحظة: إذا أدخلت باركود موجود مسبقاً، سيتم تحديث الكمية بدلاً من إنشاء منتج جديد.</p>
+            <h3 className="text-xl font-bold mb-4 text-gray-800">
+               {newProduct.id ? 'تعديل بيانات المنتج' : 'إضافة منتج جديد'}
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">
+               {newProduct.id ? 'قم بتعديل الكمية أو الأسعار.' : 'ملاحظة: إذا أدخلت باركود موجود مسبقاً، سيتم تحديث الكمية بدلاً من إنشاء منتج جديد.'}
+            </p>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">اسم المنتج</label>
@@ -398,12 +441,12 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onUpdateP
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">الكمية</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الكمية {newProduct.id && '(تعديل)'}</label>
                   <input 
                     required 
                     type="number" 
                     min="0" 
-                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-bold"
                     value={newProduct.stock || ''} 
                     onChange={e => setNewProduct({...newProduct, stock: Number(e.target.value)})} 
                   />

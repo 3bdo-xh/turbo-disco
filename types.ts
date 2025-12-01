@@ -66,4 +66,4 @@ export interface StoreSettings {
   isSetupComplete: boolean;
 }
 
-export type ViewState = 'SETUP' | 'LOGIN' | 'DASHBOARD' | 'INVENTORY' | 'POS' | 'REPORTS' | 'RETURNS' | 'SETTINGS' | 'USERS';
+export type ViewState = 'SETUP' | 'LOGIN' | 'DASHBOARD' | 'INVENTORY_MENU' | 'INVENTORY' | 'STOCKTAKING' | 'POS' | 'REPORTS' | 'RETURNS' | 'SETTINGS' | 'USERS';

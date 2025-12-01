@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Inventory from './components/Inventory';
+import InventoryMenu from './components/InventoryMenu';
+import Stocktaking from './components/Stocktaking';
 import POS from './components/POS';
 import Reports from './components/Reports';
 import Returns from './components/Returns';
@@ -241,8 +243,12 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} storeName={storeSettings?.storeName || 'منظومة المبيعات'} />;
       case 'DASHBOARD':
         return <Dashboard onNavigate={setCurrentView} userRole={currentUser?.role} />;
+      case 'INVENTORY_MENU':
+        return <InventoryMenu onNavigate={setCurrentView} />;
       case 'INVENTORY':
         return <Inventory products={products} onAddProduct={handleAddProduct} onUpdateProduct={handleUpdateProduct} onDeleteProduct={handleDeleteProduct} />;
+      case 'STOCKTAKING':
+        return <Stocktaking products={products} onUpdateProduct={handleUpdateProduct} />;
       case 'USERS':
         return <Users users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser!} />;
       case 'POS':

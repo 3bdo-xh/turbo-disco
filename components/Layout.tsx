@@ -21,6 +21,8 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children, curr
     switch (view) {
       case 'POS': return 'نقطة البيع';
       case 'INVENTORY': return 'إدارة المنتجات والمخزون';
+      case 'INVENTORY_MENU': return 'إدارة المخزون';
+      case 'STOCKTAKING': return 'جرد المخزون';
       case 'REPORTS': return 'التقارير والإحصائيات';
       case 'RETURNS': return 'استرجاع المنتجات';
       case 'SETTINGS': return 'الإعدادات والتحكم';
@@ -146,7 +148,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children, curr
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => onNavigate('DASHBOARD')}
+              onClick={() => onNavigate(currentView === 'INVENTORY' || currentView === 'STOCKTAKING' ? 'INVENTORY_MENU' : 'DASHBOARD')}
               className="p-2 -mr-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors active:scale-95"
             >
               <ArrowRight size={24} />
