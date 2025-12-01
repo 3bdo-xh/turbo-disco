@@ -162,6 +162,11 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
       change: change
     };
 
+    // Play Success Sound
+    const audio = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3'); // Fallback or use a register sound
+    // Using a base64 or a standard URL for "Cash Register" would be ideal. For now using the scanner pop or similar.
+    audio.play().catch(() => {});
+
     onCompleteSale(newSale);
     setLastSale(newSale);
     setCart([]);
@@ -253,6 +258,7 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
                 left: 0; 
                 top: 0; 
                 width: 100%; 
+                max-width: 100%;
                 margin: 0;
                 padding: 0;
                 background: white;
@@ -266,7 +272,7 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
           `}
         </style>
 
-        <div id="receipt-content" className="bg-white w-[380px] p-4 shadow-xl border border-gray-100 relative text-gray-900 text-sm font-sans">
+        <div id="receipt-content" className="bg-white w-[300px] md:w-[380px] p-2 md:p-4 shadow-xl border border-gray-100 relative text-gray-900 text-sm font-sans mx-auto">
           
           {/* Header */}
           <div className="text-center mb-4">
@@ -376,7 +382,7 @@ const POS: React.FC<POSProps> = ({ products, onCompleteSale, storeSettings, next
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-8 flex gap-3 w-[380px] no-print">
+        <div className="mt-8 flex gap-3 w-full max-w-[380px] px-4 no-print">
           <button onClick={() => window.print()} className="flex-1 flex items-center justify-center gap-2 border border-gray-300 py-3 rounded-xl font-medium text-gray-700 bg-white hover:bg-gray-50 shadow-sm transition-all">
             <Printer size={18} /> طباعة
           </button>

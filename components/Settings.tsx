@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StoreSettings } from '../types';
-import { Save, Info, ShieldCheck, Database, ShoppingCart, Store, Wifi, WifiOff, HardDrive, Activity } from 'lucide-react';
+import { Save, Info, ShieldCheck, Database, ShoppingCart, Store, Wifi, WifiOff, HardDrive, Activity, Download, Upload } from 'lucide-react';
 import { addData, getStoreData } from '../services/db';
 
 const Settings: React.FC = () => {
@@ -9,6 +9,7 @@ const Settings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [storageInfo, setStorageInfo] = useState<{usage: number, quota: number} | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -54,6 +55,79 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleBackup = async () => {
+    try {
+      const [allSettings, allUsers, allProducts, allSales, allReturns] = await Promise.all([
+        getStoreData('settings'),
+        getStoreData('users'),
+        getStoreData('products'),
+        getStoreData('sales'),
+        getStoreData('returns')
+      ]);
+
+      const backupData = {
+        timestamp: Date.now(),
+        version: "2.1.0",
+        data: {
+          settings: allSettings,
+          users: allUsers,
+          products: allProducts,
+          sales: allSales,
+          returns: allReturns
+        }
+      };
+
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nama_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Backup failed", err);
+      alert("فشل إنشاء النسخة الاحتياطية");
+    }
+  };
+
+  const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        if (!json.data) throw new Error("Invalid backup file");
+
+        if (confirm("سيتم استبدال البيانات الحالية بالبيانات الموجودة في النسخة الاحتياطية. هل أنت متأكد؟")) {
+           // This is a basic restore. Ideally, clear DB first or merge. 
+           // For simplicity in this PWA context, we assume merging/overwriting by ID.
+           // However, addData uses 'put' so it will overwrite if ID matches.
+           
+           const { settings, users, products, sales, returns } = json.data;
+           
+           if(settings) for (const item of settings) await addData('settings', item);
+           if(users) for (const item of users) await addData('users', item);
+           if(products) for (const item of products) await addData('products', item);
+           if(sales) for (const item of sales) await addData('sales', item);
+           if(returns) for (const item of returns) await addData('returns', item);
+
+           alert("تم استعادة البيانات بنجاح. يرجى إعادة تشغيل التطبيق.");
+           window.location.reload();
+        }
+      } catch (err) {
+        console.error("Restore failed", err);
+        alert("فشل استعادة النسخة الاحتياطية. الملف قد يكون تالفاً.");
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const formatBytes = (bytes: number, decimals = 2) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -68,7 +142,7 @@ const Settings: React.FC = () => {
   return (
     <div className="space-y-8 pb-10">
       
-      {/* System Status Section (New) */}
+      {/* System Status Section */}
       <section className="space-y-4">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <Activity className="text-primary" size={24} />
@@ -112,9 +186,34 @@ const Settings: React.FC = () => {
             </div>
 
           </div>
-          <div className="mt-4 text-xs text-gray-400 text-center">
-             يتم تخزين كافة البيانات محلياً على هذا الجهاز لضمان عدم فقدانها
+          
+          <div className="mt-6 flex flex-col md:flex-row gap-4">
+            <button 
+              onClick={handleBackup}
+              className="flex-1 bg-gray-800 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-900 transition-colors"
+            >
+              <Download size={20} />
+              نسخة احتياطية (تصدير)
+            </button>
+            <div className="flex-1 relative">
+              <input 
+                 type="file" 
+                 accept=".json" 
+                 ref={fileInputRef}
+                 onChange={handleRestore}
+                 className="hidden" 
+                 id="restore-file"
+              />
+              <label 
+                htmlFor="restore-file" 
+                className="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-200 cursor-pointer transition-colors"
+              >
+                <Upload size={20} />
+                استعادة نسخة (استيراد)
+              </label>
+            </div>
           </div>
+          <p className="text-xs text-center text-gray-400 mt-2">احتفظ بملفات النسخة الاحتياطية في مكان آمن.</p>
         </div>
       </section>
 

@@ -6,10 +6,11 @@ import { Plus, Search, Trash2, Edit2, Barcode, Camera, RefreshCw, X, Calendar, A
 interface InventoryProps {
   products: Product[];
   onAddProduct: (product: Product) => void;
+  onUpdateProduct: (product: Product) => void;
   onDeleteProduct: (id: string) => void;
 }
 
-const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteProduct }) => {
+const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onUpdateProduct, onDeleteProduct }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -48,9 +49,38 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
     };
   }, []);
 
+  const playSuccessSound = () => {
+    const audio = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3');
+    audio.play().catch(() => {});
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newProduct.name && newProduct.price) {
+      // Check if SKU already exists
+      const existingProduct = products.find(p => p.sku === newProduct.sku && newProduct.sku !== '');
+      
+      if (existingProduct) {
+        if (confirm(`المنتج "${existingProduct.name}" موجود بالفعل. هل تريد إضافة الكمية الجديدة (${newProduct.stock}) إلى المخزون الحالي؟`)) {
+          const updatedProduct = {
+             ...existingProduct,
+             stock: existingProduct.stock + Number(newProduct.stock || 0),
+             // Update price/cost if provided and different, otherwise keep old
+             price: Number(newProduct.price) || existingProduct.price,
+             cost: Number(newProduct.cost) || existingProduct.cost,
+             expiryDate: newProduct.expiryDateString ? new Date(newProduct.expiryDateString).getTime() : existingProduct.expiryDate
+          };
+          onUpdateProduct(updatedProduct);
+          playSuccessSound();
+          alert('تم تحديث المخزون بنجاح');
+          setIsModalOpen(false);
+          setNewProduct({ name: '', sku: '', price: 0, cost: 0, stock: 0, category: '', expiryDateString: '' });
+          return;
+        } else {
+           return; // Cancelled
+        }
+      }
+
       onAddProduct({
         id: Date.now().toString(),
         name: newProduct.name!,
@@ -61,6 +91,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
         category: newProduct.category || 'عام',
         expiryDate: newProduct.expiryDateString ? new Date(newProduct.expiryDateString).getTime() : undefined
       });
+      playSuccessSound();
       setIsModalOpen(false);
       setNewProduct({ name: '', sku: '', price: 0, cost: 0, stock: 0, category: '', expiryDateString: '' });
     }
@@ -118,15 +149,24 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
         config,
         (decodedText: string) => {
           // Success callback
+          playSuccessSound();
           if (target === 'SEARCH') {
             setSearchQuery(decodedText);
           } else if (target === 'SKU') {
             setNewProduct(prev => ({ ...prev, sku: decodedText }));
+            // Auto-fill details if product exists
+            const existing = products.find(p => p.sku === decodedText);
+            if (existing) {
+               setNewProduct(prev => ({ 
+                 ...prev, 
+                 name: existing.name,
+                 price: existing.price,
+                 cost: existing.cost,
+                 category: existing.category,
+                 sku: decodedText
+               }));
+            }
           }
-          
-          // Audio feedback
-          const audio = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3');
-          audio.play().catch(() => {});
           
           stopScanner();
         },
@@ -186,7 +226,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
           className="bg-primary hover:bg-teal-800 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
         >
           <Plus size={20} />
-          <span>إضافة منتج</span>
+          <span>إضافة / تحديث منتج</span>
         </button>
       </div>
 
@@ -282,6 +322,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, onAddProduct, onDeleteP
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200 h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4 text-gray-800">إضافة منتج جديد</h3>
+            <p className="text-xs text-gray-500 mb-4">ملاحظة: إذا أدخلت باركود موجود مسبقاً، سيتم تحديث الكمية بدلاً من إنشاء منتج جديد.</p>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">اسم المنتج</label>

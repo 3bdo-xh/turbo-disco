@@ -133,7 +133,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children, curr
 
         {/* Dashboard Footer */}
         <footer className="py-4 text-center text-gray-400 text-xs font-medium">
-           منظومة مبيعات © 2025
+           تنفيذ 0928102731 © 2025
         </footer>
       </div>
     );

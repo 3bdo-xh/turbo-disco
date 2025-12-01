@@ -111,6 +111,11 @@ const App: React.FC = () => {
     setProducts(prev => [...prev, plainProduct]);
   };
 
+  const handleUpdateProduct = async (product: Product) => {
+    await addData('products', product);
+    setProducts(prev => prev.map(p => p.id === product.id ? product : p));
+  };
+
   const handleDeleteProduct = async (id: string) => {
     await deleteData('products', id);
     setProducts(prev => prev.filter(p => p.id !== id));
@@ -237,7 +242,7 @@ const App: React.FC = () => {
       case 'DASHBOARD':
         return <Dashboard onNavigate={setCurrentView} userRole={currentUser?.role} />;
       case 'INVENTORY':
-        return <Inventory products={products} onAddProduct={handleAddProduct} onDeleteProduct={handleDeleteProduct} />;
+        return <Inventory products={products} onAddProduct={handleAddProduct} onUpdateProduct={handleUpdateProduct} onDeleteProduct={handleDeleteProduct} />;
       case 'USERS':
         return <Users users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser!} />;
       case 'POS':

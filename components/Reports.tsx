@@ -1,7 +1,7 @@
 
-import React from 'react';
-import { Sale, Product, ReturnRecord } from '../types';
-import { DollarSign, TrendingUp, Coins, AlertTriangle, RotateCcw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sale, Product, ReturnRecord, PaymentMethod } from '../types';
+import { DollarSign, TrendingUp, Coins, AlertTriangle, RotateCcw, Filter } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface ReportsProps {
@@ -11,20 +11,27 @@ interface ReportsProps {
 }
 
 const Reports: React.FC<ReportsProps> = ({ sales, returns, products }) => {
+  const [filterMethod, setFilterMethod] = useState<PaymentMethod | 'All'>('All');
+
+  // Filter Sales based on selected method
+  const filteredSales = filterMethod === 'All' 
+    ? sales 
+    : sales.filter(s => s.paymentMethod === filterMethod);
+
   // 1. Gross Revenue
-  const grossRevenue = sales.reduce((acc, sale) => acc + sale.total, 0);
+  const grossRevenue = filteredSales.reduce((acc, sale) => acc + sale.total, 0);
   
-  // 2. Total Returns Value
+  // 2. Total Returns Value (Only subtract returns if we are looking at All, or if we tracked return method - simplistic view here subtracts all for now or logic needs to be deeper. Keeping simple.)
   const totalReturns = returns.reduce((acc, ret) => acc + ret.amount, 0);
 
   // 3. Net Revenue
-  const netRevenue = grossRevenue - totalReturns;
+  const netRevenue = grossRevenue - (filterMethod === 'All' ? totalReturns : 0); // Only subtract returns from total view to avoid confusion
   
   // 4. Low Stock
   const lowStockProducts = products.filter(p => p.stock < 5).length;
 
-  // 5. Total Profit (Gross Profit - Return Profit Loss)
-  const grossProfit = sales.reduce((acc, sale) => {
+  // 5. Total Profit
+  const grossProfit = filteredSales.reduce((acc, sale) => {
     const saleProfit = sale.items.reduce((itemAcc, item) => {
       const product = products.find(p => p.id === item.productId);
       const cost = product ? product.cost : 0;
@@ -36,23 +43,18 @@ const Reports: React.FC<ReportsProps> = ({ sales, returns, products }) => {
   const returnProfitLoss = returns.reduce((acc, ret) => {
     const product = products.find(p => p.id === ret.productId);
     const cost = product ? product.cost : 0;
-    // We lost the margin we made on this sale. Margin = Price - Cost.
-    // Refund Amount is Price * Qty.
-    // Cost recovered is Cost * Qty (since item is back in stock).
-    // So lost profit is (Price - Cost) * Qty.
-    // Or simplified: Amount - (Cost * Qty).
     const profitLost = ret.amount - (cost * ret.quantity);
     return acc + profitLost;
   }, 0);
 
-  const netProfit = grossProfit - returnProfitLoss;
+  const netProfit = grossProfit - (filterMethod === 'All' ? returnProfitLoss : 0);
 
   const now = Date.now();
   const thirtyDaysFromNow = now + (30 * 24 * 60 * 60 * 1000);
   const expiredProducts = products.filter(p => p.expiryDate && p.expiryDate < now);
   const expiringSoonProducts = products.filter(p => p.expiryDate && p.expiryDate >= now && p.expiryDate < thirtyDaysFromNow);
 
-  const salesByDate = sales.reduce((acc, sale) => {
+  const salesByDate = filteredSales.reduce((acc, sale) => {
     const date = new Date(sale.date).toLocaleDateString('ar-LY');
     acc[date] = (acc[date] || 0) + sale.total;
     return acc;
@@ -73,7 +75,27 @@ const Reports: React.FC<ReportsProps> = ({ sales, returns, products }) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-gray-800">التقارير والتحليلات</h2></div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h2 className="text-2xl font-bold text-gray-800">التقارير والتحليلات</h2>
+        <div className="flex items-center gap-2">
+           <Filter size={18} className="text-gray-500" />
+           <select 
+             value={filterMethod} 
+             onChange={(e) => setFilterMethod(e.target.value as any)}
+             className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
+           >
+             <option value="All">جميع طرق الدفع</option>
+             <option value="Cash">كاش (نقدي)</option>
+             <option value="Bank Card">بطاقة مصرفية</option>
+             <option value="MobiCash">موبي كاش</option>
+             <option value="Yusur Pay">يسر باي</option>
+             <option value="Masrafy Pay">مصرفي باي</option>
+             <option value="Sahary Pay">صحاري باي</option>
+             <option value="One Pay">وان باي</option>
+             <option value="Transfer">تحويل مصرفي</option>
+           </select>
+        </div>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
@@ -134,13 +156,25 @@ const Reports: React.FC<ReportsProps> = ({ sales, returns, products }) => {
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold mb-4 text-gray-800">أحدث المعاملات</h3>
-          <div className="overflow-x-auto">
+          <h3 className="text-lg font-bold mb-4 text-gray-800">تفاصيل المعاملات</h3>
+          <div className="overflow-x-auto max-h-64 overflow-y-auto">
             <table className="w-full text-sm text-right">
-              <thead className="text-gray-500 border-b"><tr><th className="pb-2">رقم الفاتورة</th><th className="pb-2">المبلغ</th><th className="pb-2">التاريخ</th></tr></thead>
+              <thead className="text-gray-500 border-b sticky top-0 bg-white">
+                <tr>
+                  <th className="pb-2">#</th>
+                  <th className="pb-2">المبلغ</th>
+                  <th className="pb-2">طريقة الدفع</th>
+                  <th className="pb-2">التاريخ</th>
+                </tr>
+              </thead>
               <tbody>
-                {sales.slice(-5).reverse().map(sale => (
-                  <tr key={sale.id} className="border-b hover:bg-gray-50"><td className="py-3 font-medium">#{sale.id.length > 8 ? sale.id.slice(-6) : sale.id}</td><td className="py-3 text-green-600 font-bold">{sale.total} د.ل</td><td className="py-3 text-gray-500">{new Date(sale.date).toLocaleDateString('ar-LY')}</td></tr>
+                {filteredSales.slice().reverse().map(sale => (
+                  <tr key={sale.id} className="border-b hover:bg-gray-50">
+                    <td className="py-3 font-medium text-xs">#{sale.id}</td>
+                    <td className="py-3 text-green-600 font-bold">{sale.total} د.ل</td>
+                    <td className="py-3 text-gray-500 text-xs">{sale.paymentMethod}</td>
+                    <td className="py-3 text-gray-400 text-xs" dir="ltr">{new Date(sale.date).toLocaleDateString('ar-LY')}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
